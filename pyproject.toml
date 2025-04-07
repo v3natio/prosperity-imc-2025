@@ -1,0 +1,21 @@
+[project]
+name = "prosperity-imc-2025"
+version = "0.1.0"
+description = ""
+authors = [
+  { name = "v3natio", email = "72844565+v3natio@users.noreply.github.com" },
+  { name = "fooname", email = "72844565+v3natio@users.noreply.github.com" },
+]
+readme = "README.md"
+requires-python = "~=3.10"
+dependencies = [
+  "numpy (>=2.2.4,<3.0.0)",
+  "pandas (>=2.2.3,<3.0.0)",
+  "matplotlib (>=3.10.1,<4.0.0)",
+  "jsonpickle (>=4.0.5,<5.0.0)",
+  "tqdm (>=4.67.1,<5.0.0)",
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
