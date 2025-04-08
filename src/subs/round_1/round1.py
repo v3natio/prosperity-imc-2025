@@ -281,63 +281,17 @@ class ResinStrategy(MarketMakingStrategy):
 
 
 class InkStrategy(MarketMakingStrategy):
-    def __init__(self, symbol: str, limit: int, params: dict) -> None:
-        """
-        params should be a dictionary containing:
-         - "adverse_volume": volume threshold to filter out smaller orders
-         - "reversion_beta": a factor for mean reversion adjustment
-        """
-        super().__init__(symbol, limit)
-        self.params = params
-        self.traderObject = {}  # stores the last fair price
-
-    def get_true_value(self, state: "TradingState") -> int:
+    def get_true_value(self, state: TradingState) -> int:
         order_depth = state.order_depths[self.symbol]
 
-        # Ensure there are orders on both sides
-        if len(order_depth.sell_orders) == 0 or len(order_depth.buy_orders) == 0:
-            return 0
+        order_depth = state.order_depths[self.symbol]
+        buy_orders = sorted(order_depth.buy_orders.items(), reverse=True)
+        sell_orders = sorted(order_depth.sell_orders.items())
 
-        best_ask = min(order_depth.sell_orders.keys())
-        best_bid = max(order_depth.buy_orders.keys())
+        popular_buy_price = max(buy_orders, key=lambda tup: tup[1])[0]
+        popular_sell_price = min(sell_orders, key=lambda tup: tup[1])[0]
 
-        # Filter orders by volume threshold (adverse_volume)
-        adverse_volume = self.params.get("adverse_volume", 15)
-        filtered_ask = [
-            price
-            for price in order_depth.sell_orders.keys()
-            if abs(order_depth.sell_orders[price]) >= adverse_volume
-        ]
-        filtered_bid = [
-            price
-            for price in order_depth.buy_orders.keys()
-            if abs(order_depth.buy_orders[price]) >= adverse_volume
-        ]
-
-        mm_ask = min(filtered_ask) if filtered_ask else None
-        mm_bid = max(filtered_bid) if filtered_bid else None
-
-        # Use market maker mid if available; else fallback to simple average of best ask and bid.
-        if mm_ask is None or mm_bid is None:
-            if self.traderObject.get("ink_last_price", None) is None:
-                mmmid_price = (best_ask + best_bid) / 2
-            else:
-                mmmid_price = self.traderObject["ink_last_price"]
-        else:
-            mmmid_price = (mm_ask + mm_bid) / 2
-
-        # Adjust fair value based on mean reversion if we have a last price.
-        if self.traderObject.get("ink_last_price", None) is not None:
-            last_price = self.traderObject["ink_last_price"]
-            last_return = (mmmid_price - last_price) / last_price
-            reversion_beta = self.params.get("reversion_beta", -0.229)
-            pred_return = last_return * reversion_beta
-            fair = mmmid_price + (mmmid_price * pred_return)
-        else:
-            fair = mmmid_price
-
-        self.traderObject["ink_last_price"] = mmmid_price
-        return round(fair)
+        return round((popular_buy_price + popular_sell_price) / 2)
 
 
 class Trader:
@@ -347,24 +301,12 @@ class Trader:
             "RAINFOREST_RESIN": 50,
             "SQUID_INK": 50,
         }
-
-        # Define parameters for strategies that need them.
-        optimal_params = {
-            "SQUID_INK": {
-                "adverse_volume": 15,  # optimal adverse volume value
-                "reversion_beta": -0.2,  # optimal reversion beta value
-            }
-        }
-
         self.strategies = {
             "KELP": KelpStrategy("KELP", limits["KELP"]),
             "RAINFOREST_RESIN": ResinStrategy(
                 "RAINFOREST_RESIN", limits["RAINFOREST_RESIN"]
             ),
-            # For SQUID_INK (i.e. InkStrategy), supply both limit and the params dictionary.
-            "SQUID_INK": InkStrategy(
-                "SQUID_INK", limits["SQUID_INK"], optimal_params["SQUID_INK"]
-            ),
+            "SQUID_INK": InkStrategy("SQUID_INK", limits["SQUID_INK"]),
         }
 
     def run(self, state: TradingState) -> tuple[dict[Symbol, list[Order]], int, str]:
