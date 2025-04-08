@@ -261,84 +261,6 @@ class MarketMakingStrategy(Strategy):
         self.window = deque(data)
 
 
-class MeanReversionStrategy(Strategy):
-    def __init__(
-        self, symbol: str, limit: int, window_size: int = 10, threshold: float = 0.01
-    ) -> None:
-        """
-        Args:
-            symbol: The asset symbol.
-            limit: Maximum allowed position (absolute value).
-            window_size: Number of recent price observations to compute the moving average.
-            threshold: Relative percentage deviation (e.g., 0.01 for 1%)
-                       used to decide when the price is significantly away from the moving average.
-        """
-        super().__init__(symbol, limit)
-        self.window_size = window_size
-        self.threshold = threshold
-        self.prices_window = deque(maxlen=window_size)
-
-    def update_price(self, price: float) -> None:
-        """Add the latest price to our window of recent prices."""
-        self.prices_window.append(price)
-
-    def get_moving_average(self) -> float:
-        """Compute the moving average using the current price window."""
-        if not self.prices_window:
-            return 0.0
-        return sum(self.prices_window) / len(self.prices_window)
-
-    def mean_reversion_signal(self, current_price: float) -> str:
-        """
-        Compare the current price with the moving average.
-
-        Returns:
-            "buy" if the price is sufficiently below the average,
-            "sell" if the price is sufficiently above the average,
-            "hold" otherwise.
-        """
-        avg = self.get_moving_average()
-        if avg == 0:
-            return "hold"
-        # Check for a buy signal: current price is below average by threshold %
-        if current_price < avg * (1 - self.threshold):
-            return "buy"
-        # Check for a sell signal: current price is above average by threshold %
-        elif current_price > avg * (1 + self.threshold):
-            return "sell"
-        else:
-            return "hold"
-
-    def act(self, state: "TradingState") -> None:
-        """
-        Default mean-reversion act() method.
-        Uses the order book of the current symbol to compute a mid-price,
-        updates the moving average window, and then issues trades if the price is too low or high.
-        """
-        order_depth = state.order_depths[self.symbol]
-        # Proceed if we have orders on both sides
-        if order_depth.buy_orders and order_depth.sell_orders:
-            best_bid = max(order_depth.buy_orders.keys())
-            best_ask = min(order_depth.sell_orders.keys())
-            # Compute mid-price
-            mid_price = (best_bid + best_ask) / 2.0
-            # Update our price window
-            self.update_price(mid_price)
-
-            signal = self.mean_reversion_signal(mid_price)
-            position = state.position.get(self.symbol, 0)
-
-            if signal == "buy" and position < self.limit:
-                # Calculate how much we can buy without exceeding the limit
-                qty = self.limit - position
-                self.buy(int(mid_price), qty)
-            elif signal == "sell" and position > -self.limit:
-                # Calculate how much we can sell without breaching the negative limit
-                qty = position + self.limit
-                self.sell(int(mid_price), qty)
-        # If there is no order book data, do nothing.
-
-
 class KelpStrategy(MarketMakingStrategy):
     def get_true_value(self, state: TradingState) -> int:
         order_depth = state.order_depths[self.symbol]
@@ -358,17 +280,64 @@ class ResinStrategy(MarketMakingStrategy):
         return 10_000
 
 
-class InkStrategy(MeanReversionStrategy):
-    def __init__(
-        self, symbol: str, limit: int, window_size: int = 10, threshold: float = 0.01
-    ) -> None:
+class InkStrategy(MarketMakingStrategy):
+    def __init__(self, symbol: str, limit: int, params: dict) -> None:
         """
-        InkStrategy uses a mean reversion approach.
-        The threshold here is set to 2% by default (which you can adjust),
-        reflecting that Ink tends to revert to a mean value until a stronger signal (e.g., breakout) occurs.
+        params should be a dictionary containing:
+         - "adverse_volume": volume threshold to filter out smaller orders
+         - "reversion_beta": a factor for mean reversion adjustment
         """
-        # Optionally adjust threshold (e.g., 2% for Ink, versus 1% in generic logic)
-        super().__init__(symbol, limit, window_size, threshold)
+        super().__init__(symbol, limit)
+        self.params = params
+        self.traderObject = {}  # stores the last fair price
+
+    def get_true_value(self, state: "TradingState") -> int:
+        order_depth = state.order_depths[self.symbol]
+
+        # Ensure there are orders on both sides
+        if len(order_depth.sell_orders) == 0 or len(order_depth.buy_orders) == 0:
+            return 0
+
+        best_ask = min(order_depth.sell_orders.keys())
+        best_bid = max(order_depth.buy_orders.keys())
+
+        # Filter orders by volume threshold (adverse_volume)
+        adverse_volume = self.params.get("adverse_volume", 15)
+        filtered_ask = [
+            price
+            for price in order_depth.sell_orders.keys()
+            if abs(order_depth.sell_orders[price]) >= adverse_volume
+        ]
+        filtered_bid = [
+            price
+            for price in order_depth.buy_orders.keys()
+            if abs(order_depth.buy_orders[price]) >= adverse_volume
+        ]
+
+        mm_ask = min(filtered_ask) if filtered_ask else None
+        mm_bid = max(filtered_bid) if filtered_bid else None
+
+        # Use market maker mid if available; else fallback to simple average of best ask and bid.
+        if mm_ask is None or mm_bid is None:
+            if self.traderObject.get("ink_last_price", None) is None:
+                mmmid_price = (best_ask + best_bid) / 2
+            else:
+                mmmid_price = self.traderObject["ink_last_price"]
+        else:
+            mmmid_price = (mm_ask + mm_bid) / 2
+
+        # Adjust fair value based on mean reversion if we have a last price.
+        if self.traderObject.get("ink_last_price", None) is not None:
+            last_price = self.traderObject["ink_last_price"]
+            last_return = (mmmid_price - last_price) / last_price
+            reversion_beta = self.params.get("reversion_beta", -0.229)
+            pred_return = last_return * reversion_beta
+            fair = mmmid_price + (mmmid_price * pred_return)
+        else:
+            fair = mmmid_price
+
+        self.traderObject["ink_last_price"] = mmmid_price
+        return round(fair)
 
 
 class Trader:
@@ -379,13 +348,23 @@ class Trader:
             "SQUID_INK": 50,
         }
 
+        # Define parameters for strategies that need them.
+        optimal_params = {
+            "SQUID_INK": {
+                "adverse_volume": 15,  # optimal adverse volume value
+                "reversion_beta": -0.2,  # optimal reversion beta value
+            }
+        }
+
         self.strategies = {
-            symbol: clazz(symbol, limits[symbol])
-            for symbol, clazz in {
-                "KELP": KelpStrategy,
-                "RAINFOREST_RESIN": ResinStrategy,
-                "SQUID_INK": InkStrategy,
-            }.items()
+            "KELP": KelpStrategy("KELP", limits["KELP"]),
+            "RAINFOREST_RESIN": ResinStrategy(
+                "RAINFOREST_RESIN", limits["RAINFOREST_RESIN"]
+            ),
+            # For SQUID_INK (i.e. InkStrategy), supply both limit and the params dictionary.
+            "SQUID_INK": InkStrategy(
+                "SQUID_INK", limits["SQUID_INK"], optimal_params["SQUID_INK"]
+            ),
         }
 
     def run(self, state: TradingState) -> tuple[dict[Symbol, list[Order]], int, str]:

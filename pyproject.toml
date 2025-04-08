@@ -4,7 +4,7 @@ version = "0.1.0"
 description = ""
 authors = [
   { name = "v3natio", email = "72844565+v3natio@users.noreply.github.com" },
-  { name = "fooname", email = "72844565+v3natio@users.noreply.github.com" },
+  { name = "rrollpk", email = "fooid+fooname@users.noreply.github.com" },
 ]
 readme = "README.md"
 requires-python = "~=3.10"
@@ -18,6 +18,9 @@ dependencies = [
   "jupyterlab (>=4.4.0,<5.0.0)",
   "prosperity3submit (>=0.1.0,<0.2.0)",
   "plotly (>=6.0.1,<7.0.0)",
+  "pywavelets (>=1.8.0,<2.0.0)",
+  "scipy (>=1.15.2,<2.0.0)",
+  "statsmodels (>=0.14.4,<0.15.0)",
 ]
 
 [build-system]
