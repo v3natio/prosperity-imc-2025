@@ -255,11 +255,6 @@ class MarketMakingStrategy(Strategy):
         self.window = deque(data)
 
 
-class KelpStrategy(MarketMakingStrategy):
-    def get_true_value(self, state: TradingState) -> int:
-        return 2_000
-
-
 class OtherStrategy(MarketMakingStrategy):
     def get_true_value(self, state: TradingState) -> int:
         order_depth = state.order_depths[self.symbol]
@@ -279,13 +274,13 @@ class Trader:
         limits = {
             "KELP": 50,
             "RAINFOREST_RESIN": 50,
-            "SQUID_INK": 50,
+            "SQUID_INK": 0,
         }
 
         self.strategies = {
             symbol: clazz(symbol, limits[symbol])
             for symbol, clazz in {
-                "KELP": KelpStrategy,
+                "KELP": OtherStrategy,
                 "RAINFOREST_RESIN": OtherStrategy,
                 "SQUID_INK": OtherStrategy,
             }.items()
