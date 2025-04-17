@@ -2590,14 +2590,14 @@ wcwidth = "*"
 
 [[package]]
 name = "prosperity3bt"
-version = "0.8.0"
+version = "0.9.0"
 description = "Backtester for IMC Prosperity 3 algorithms"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "prosperity3bt-0.8.0-py3-none-any.whl", hash = "sha256:b7fbf0e092c10e1df9e6a06f18f08b1d7a427d5310c6c69597c5ea1145fa2ca1"},
-    {file = "prosperity3bt-0.8.0.tar.gz", hash = "sha256:fa23f52f5eb7b089f65d4d47f3240036b2a62324bd568434fa80ea5717bf8aac"},
+    {file = "prosperity3bt-0.9.0-py3-none-any.whl", hash = "sha256:e6902c2cd63aeb20b1d27d3041ac02d9ec0f7363f3020dadb1807cece9dde378"},
+    {file = "prosperity3bt-0.9.0.tar.gz", hash = "sha256:897adcd2245ea21db28afc01928ca214d1969f0720b1354d78060fc7853f5d1c"},
 ]
 
 [package.dependencies]
@@ -3933,4 +3933,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "~=3.10"
-content-hash = "4998328733abccccfa76f6b12957dc44750de0a742099f8865f93e5a09df4542"
+content-hash = "9b5fbb3d8927104b2118ebe64bffdb2932ddb3b4f99638154f07b6645f359016"
