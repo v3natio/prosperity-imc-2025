@@ -1,6 +1,7 @@
 import itertools
 from typing import List, Tuple
 
+# exchange matrix
 prices = {
     "Snowball": {"Snowball": 1, "Pizza": 1.45, "Nuggets": 0.52, "Shells": 0.72},
     "Pizza": {"Snowball": 0.7, "Pizza": 1, "Nuggets": 0.31, "Shells": 0.48},
@@ -12,7 +13,7 @@ goods = list(prices.keys())
 
 
 def calc_trade_value(path: List[str], start_amount: float) -> float:
-    """Simulate a series of trades and return the final amount."""
+    """simulate a series of trades and return the final amount."""
     amount = start_amount
     for i in range(len(path) - 1):
         amount *= prices[path[i]][path[i + 1]]
@@ -22,7 +23,7 @@ def calc_trade_value(path: List[str], start_amount: float) -> float:
 def find_best_trade_path(
     start_good: str, start_amount: float, max_depth: int = 4
 ) -> Tuple[float, List[str]]:
-    """Find the most profitable trade path starting and ending with a given good."""
+    """find the most profitable path starting and ending with Seashells."""
     best_amount = start_amount
     best_path = [start_good]
 
@@ -33,9 +34,6 @@ def find_best_trade_path(
                 continue  # skip no-op trades
 
             final_amount = calc_trade_value(full_path, start_amount)
-            # if final_amount > best_amount:
-            #    best_amount = final_amount
-            #    best_path = full_path
             if (final_amount > best_amount) or (
                 final_amount == best_amount and len(full_path) < len(best_path)
             ):

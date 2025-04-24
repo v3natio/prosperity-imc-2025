@@ -2590,14 +2590,14 @@ wcwidth = "*"
 
 [[package]]
 name = "prosperity3bt"
-version = "0.9.0"
+version = "0.11.0"
 description = "Backtester for IMC Prosperity 3 algorithms"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "prosperity3bt-0.9.0-py3-none-any.whl", hash = "sha256:e6902c2cd63aeb20b1d27d3041ac02d9ec0f7363f3020dadb1807cece9dde378"},
-    {file = "prosperity3bt-0.9.0.tar.gz", hash = "sha256:897adcd2245ea21db28afc01928ca214d1969f0720b1354d78060fc7853f5d1c"},
+    {file = "prosperity3bt-0.11.0-py3-none-any.whl", hash = "sha256:8584bc2078ee867899c8e7d7c70ada519304c56a77f0bcebe1884a56ff7c7ce1"},
+    {file = "prosperity3bt-0.11.0.tar.gz", hash = "sha256:bf711bfab734fee08abf801252e3a40db762524d1ca935f3561dc7d0f524ded5"},
 ]
 
 [package.dependencies]
@@ -3040,6 +3040,18 @@ files = [
 
 [package.dependencies]
 cffi = {version = "*", markers = "implementation_name == \"pypy\""}
+
+[[package]]
+name = "randomcolor"
+version = "0.4.4.6"
+description = "For generating attractive random colors"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "randomcolor-0.4.4.6-py3-none-any.whl", hash = "sha256:1f1a81d39cacae560c499fda390913a6bf47d6c0c1cd61f625a2a87a16dfff45"},
+    {file = "randomcolor-0.4.4.6.tar.gz", hash = "sha256:d2b66f07ea8606aee55b648aed82e810964bbd3f6dfba0e6d57818761d437c93"},
+]
 
 [[package]]
 name = "referencing"
@@ -3933,4 +3945,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "~=3.10"
-content-hash = "9b5fbb3d8927104b2118ebe64bffdb2932ddb3b4f99638154f07b6645f359016"
+content-hash = "13e675b813e9a5cfa30ca472b62f6d4625740f640b02e0f311747c00ae70d73e"

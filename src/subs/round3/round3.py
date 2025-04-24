@@ -15,7 +15,7 @@ from datamodel import (
     Trade,
     TradingState,
 )
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, Dict
 
 JSON: TypeAlias = dict[str, "JSON"] | list["JSON"] | str | int | float | bool | None
 
@@ -120,8 +120,8 @@ class Logger:
                 observation.transportFees,
                 observation.exportTariff,
                 observation.importTariff,
-                observation.sunlight,
-                observation.humidity,
+                observation.sugarPrice,
+                observation.sunlightIndex,
             ]
 
         return [observations.plainValueObservations, conversion_observations]
@@ -138,10 +138,25 @@ class Logger:
         return json.dumps(value, cls=ProsperityEncoder, separators=(",", ":"))
 
     def truncate(self, value: str, max_length: int) -> str:
-        if len(value) <= max_length:
-            return value
+        lo, hi = 0, min(len(value), max_length)
+        out = ""
 
-        return value[: max_length - 3] + "..."
+        while lo <= hi:
+            mid = (lo + hi) // 2
+
+            candidate = value[:mid]
+            if len(candidate) < len(value):
+                candidate += "..."
+
+            encoded_candidate = json.dumps(candidate)
+
+            if len(encoded_candidate) <= max_length:
+                out = candidate
+                lo = mid + 1
+            else:
+                hi = mid - 1
+
+        return out
 
 
 logger = Logger()
@@ -324,7 +339,7 @@ class BasketStrategy(Strategy):
         self.prev_zscore = 0
 
     def get_swmid(self, order_depth) -> float:
-        """Calculate the volume-weighted mid price"""
+        # calc volume weighted mid px
         best_bid = max(order_depth.buy_orders.keys())
         best_ask = min(order_depth.sell_orders.keys())
         best_bid_vol = abs(order_depth.buy_orders[best_bid])
@@ -334,18 +349,16 @@ class BasketStrategy(Strategy):
         )
 
     def get_synthetic_basket_order_depth(self, state: TradingState) -> OrderDepth:
-        """Calculate synthetic basket order depth from components"""
         order_depths = state.order_depths
         basket_composition = self.basket_weights
 
-        # Initialize the synthetic basket order depth
         synthetic_order_price = OrderDepth()
 
-        # Track the best bids and asks for each component in the basket
+        # track best bid/ask of constituents
         component_best_bids = {}
         component_best_asks = {}
 
-        # Calculate the best bid and ask for each component
+        # calc best bid/ask of constituents
         for component, weight in basket_composition.items():
             if component in order_depths and order_depths[component].buy_orders:
                 component_best_bids[component] = max(
@@ -361,7 +374,7 @@ class BasketStrategy(Strategy):
             else:
                 component_best_asks[component] = float("inf")
 
-        # Calculate the implied bid and ask for the synthetic basket
+        # calc implied bid/ask of synthetic basket
         implied_bid = sum(
             component_best_bids[component] * weight
             for component, weight in basket_composition.items()
@@ -371,9 +384,9 @@ class BasketStrategy(Strategy):
             for component, weight in basket_composition.items()
         )
 
-        # Calculate the maximum number of synthetic baskets available at the implied bid and ask
+        # calculate max synthetic baskets possible based on implied bid/ask
         if implied_bid > 0:
-            # Calculate how many baskets we can create based on each component's volume
+            # calculate synthetic basket amount based on constituent volume
             implied_bid_volumes = []
             for component, weight in basket_composition.items():
                 if component_best_bids[component] > 0:
@@ -382,12 +395,12 @@ class BasketStrategy(Strategy):
                     ]
                     implied_bid_volumes.append(component_volume // weight)
 
-            if implied_bid_volumes:  # Make sure we have volumes to calculate with
+            if implied_bid_volumes:  # constituent volume check
                 implied_bid_volume = min(implied_bid_volumes)
                 synthetic_order_price.buy_orders[implied_bid] = implied_bid_volume
 
         if implied_ask < float("inf"):
-            # Calculate how many baskets we can create based on each component's volume
+            # calculate synthetic basket amount based on constituent volume
             implied_ask_volumes = []
             for component, weight in basket_composition.items():
                 if component_best_asks[component] < float("inf"):
@@ -396,14 +409,14 @@ class BasketStrategy(Strategy):
                     ]
                     implied_ask_volumes.append(component_volume // weight)
 
-            if implied_ask_volumes:  # Make sure we have volumes to calculate with
+            if implied_ask_volumes:  # product volume check
                 implied_ask_volume = min(implied_ask_volumes)
                 synthetic_order_price.sell_orders[implied_ask] = -implied_ask_volume
 
         return synthetic_order_price
 
     def act(self, state: TradingState) -> None:
-        # Check if all required products are in order_depths
+        # check all products are in order depth
         basket_type = self.symbol
         if any(
             symbol not in state.order_depths
@@ -414,7 +427,7 @@ class BasketStrategy(Strategy):
         basket_order_depth = state.order_depths[basket_type]
         synthetic_order_depth = self.get_synthetic_basket_order_depth(state)
 
-        # Check if order depths have sufficient data
+        # check order depth
         if (
             not basket_order_depth.buy_orders
             or not basket_order_depth.sell_orders
@@ -423,33 +436,33 @@ class BasketStrategy(Strategy):
         ):
             return
 
-        # Calculate spread
+        # calc spread
         basket_swmid = self.get_swmid(basket_order_depth)
         synthetic_swmid = self.get_swmid(synthetic_order_depth)
         spread = basket_swmid - synthetic_swmid
 
-        # Update spread history
+        # update spread hist
         self.spread_history.append(spread)
 
-        # Need enough history for statistical calculation
+        # enough data check
         if len(self.spread_history) < self.spread_std_window:
             return
 
-        # Calculate z-score
+        # calc zscore
         spread_std = np.std(list(self.spread_history))
         zscore = (spread - self.default_spread_mean) / spread_std
 
-        # Get current position
+        # get curr pos
         position = state.position.get(basket_type, 0)
 
-        # Trading logic based on z-score
+        # zscore threshold
         if zscore >= self.zscore_threshold:
             if position > -self.target_position:
                 quantity_to_sell = min(
                     position + self.target_position, self.limit + position
                 )
                 if quantity_to_sell > 0:
-                    # Sell at best bid price
+                    # sell at best bid
                     price = max(basket_order_depth.buy_orders.keys())
                     self.sell(price, quantity_to_sell)
 
@@ -459,7 +472,7 @@ class BasketStrategy(Strategy):
                     self.target_position - position, self.limit - position
                 )
                 if quantity_to_buy > 0:
-                    # Buy at best ask price
+                    # buy at best ask
                     price = min(basket_order_depth.sell_orders.keys())
                     self.buy(price, quantity_to_buy)
 
@@ -502,30 +515,30 @@ class BlackScholesStrategy(SignalStrategy):
         limit: int,
         underlying_symbol: str,
         strike_price: int,
-        initial_time_to_expiry: float,  # New parameter
-        option_type: str = "call",  # "call" or "put"
+        initial_time_to_expiry: float,
+        option_type: str = "call",
         history_length: int = 50,
         threshold: float = 2.0,
     ) -> None:
         super().__init__(symbol, limit)
 
-        # Option parameters
+        # option params
         self.underlying_symbol = underlying_symbol
         self.strike_price = strike_price
         self.initial_time_to_expiry = initial_time_to_expiry
-        self.option_type = option_type.lower()  # "call" or "put"
+        self.option_type = option_type.lower()  # call/put
         self.threshold = threshold
 
-        # Volatility calculation
+        # vol calc
         self.history_length = history_length
         self.price_history = deque(maxlen=history_length)
 
     def update_price_history(self, new_price: float) -> None:
-        """Update the price history with the new mid price."""
+        # update px hist from mid_price
         self.price_history.append(new_price)
 
     def compute_sigma(self) -> float:
-        """Compute realized volatility from price history."""
+        # realized vol from px hist
         if len(self.price_history) < 3:
             raise ValueError("Not enough data to compute sigma")
 
@@ -569,15 +582,13 @@ class BlackScholesStrategy(SignalStrategy):
 
         S = underlying_price
         K = self.strike_price
-        r = 0  # Assumed risk-free rate
+        r = 0
 
-        # --- NEW DYNAMIC TIME-TO-EXPIRY CALCULATION ---
-        mill = 1_000_000  # Ticks per day.
-        frac = state.timestamp / mill  # Fraction of the day that has elapsed (0 to 1).
+        mill = 1_000_000  # ticks per day
+        frac = state.timestamp / mill  # how much of the curr day has passed
         T = self.initial_time_to_expiry - (frac / 365)
-        # -------------------------------------------------
 
-        # Determine fair value using Black-Scholes
+        # determine option fair value using BSM
         if self.option_type == "call":
             fair_value = BS_CALL(S, K, T, r, sigma)
         else:
@@ -815,9 +826,9 @@ class Trader:
                 "RAINFOREST_RESIN": ResinStrategy,
                 "KELP": KelpStrategy,
                 "SQUID_INK": InkStrategy,
-                # "CROISSANTS": PicnicBasket1Strategy,
-                # "JAMS": PicnicBasket1Strategy,
-                # "DJEMBES": PicnicBasket1Strategy,
+                # "CROISSANTS": None,
+                # "JAMS": None,
+                # "DJEMBES": None,
                 "PICNIC_BASKET1": PicnicBasket1Strategy,
                 "PICNIC_BASKET2": PicnicBasket2Strategy,
                 # "VOLCANIC_ROCK": None,

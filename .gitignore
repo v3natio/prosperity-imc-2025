@@ -1,6 +1,5 @@
-backtests/
-imc-prosperity-2/
 .idea/
 .venv/
 .ipynb_checkpoints
+poetry.lock
 .python-version
